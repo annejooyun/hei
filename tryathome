@@ -1,0 +1,164 @@
+#include "channels.h"
+#include "elev.h"
+#include "io.h"
+
+
+// Motor direction for function elev_set_motor_direction().
+
+typedef enum tag_elev_motor_direction {
+	DIRN_DOWN = -1,
+	DIRN_STOP = 0,
+	DIRN_UP = 1
+} elev_motor_direction_t;
+
+
+
+
+
+// Checks if it is sufficient to keep on going in the same direction
+// Is only triggered if queue is not empty
+
+elev_motor_direction_t whatDirection() {
+	int currFloor = elev_get_floor_sensor_signal();
+
+	/*if(currFloor == -1){
+		return MOTORDIR;
+	}*/
+
+	if (MOTORDIR == DIRN_DOWN) {
+
+		//check if there is any CAB or DOWN orders in DOWN directon
+		for (int i = 0; i < currFloor; i++) {
+			for (int j = 0; j < N_BUTTONS; j++) {
+				if (button_channel_matrix[i][j] == 1) {
+					return DIRN_DOWN;
+					}
+				}
+			}
+			return DIRN_UP;
+		}
+
+	else if (MOTORDIR == DIRN_UP){
+
+		   //check if there is any CAB or UP orders in UP direction
+			 for (int i = currFloor + 1; i < N_FLOORS; i++) {
+				 for(int j = 0; j < N_BUTTONS; j++){
+					 if (button_channel_matrix[i][j] == 1) {
+						 return DIRN_UP;
+					 }
+				 }
+			 }
+				return DIRN_DOWN;
+			}
+	}
+
+
+
+// Checks if the elevator should stop on a floor
+bool shouldIStop(){
+
+	int currFloor = elev_get_floor_sensor_signal();
+
+	for (int i = 0, i < N_BUTTONS; i++) {
+		if(button_channel_matrix[currFloor][i] == 1){
+			return true;
+		}
+	}
+	else{
+		return false;
+	}
+}
+
+
+// Checks if someone has ordered anything
+bool isQueueEmpty(){
+	for(int i = 0; i < N_FLOORS; i++) {
+		for (int j = 0; j < N_BUTTONS; j++){
+			if (button_channel_matrix[i][j] == 1){
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+
+// Timer for door
+void threeSecTimer(){
+	int msec = 0, trigger = 3000; /* 10ms */
+clock_t before = clock();
+
+do {
+  /*
+   * Do something to busy the CPU just here while you drink a coffee
+   * Be sure this code will not take more than `trigger` ms
+   */
+
+  clock_t difference = clock() - before;
+  msec = difference * 1000 / CLOCKS_PER_SEC;
+  iterations++;
+} while ( msec < trigger );
+
+printf("Time taken %d seconds %d milliseconds (%d iterations)\n",
+  msec/1000, msec%1000, iterations);
+}
+
+// Is triggered when STOP-button is pressed
+// Deletes every order already in queue
+void yeetusDeletus(){
+	for(int i = 0; i < N_FLOORS; i++){
+		for (int j = 0; j < N_BUTTONS; j++){
+			button_channel_matrix[i][j] == 0;
+		}
+	}
+}
+
+
+// Is triggered when shouldIStop is true
+void deleteOrder(){
+	int currFloor = elev_get_floor_sensor_signal();
+	for(int i = 0; i < N_BUTTONS; i++){
+		button_channel_matrix[currFloor][i] = 0;
+	}
+}
+
+
+
+
+// MODULER
+
+// Checks if a button is pressed
+void pollButtons(){
+	for(int i = 0; i < N_FLOORS; i++){
+		for (int j = 0; j < N_BUTTONS; j++){
+			if(elev_get_button_signal(j, i) == 1){
+				button_channel_matrix[i][j] == 1;
+				elev_set_button_lamp(j, i, 1);
+			}
+		}
+	}
+}
+
+// Is triggered when elevator has arrived and stopped at a floor
+void completeOrder(){
+	elev_set_motor_direction(DIRN_STOP);
+	elev_set_door_open_lamp(1);
+
+	int currFloor = elev_get_floor_sensor_signal();
+	for(int i = 0; i < N_BUTTONS; i++){
+		button_channel_matrix[currFloor][i] = 0;
+	} 
+
+}
+
+
+// Is active when STOP-button is pressed
+void stopEverything(){
+	elev_set_motor_direction(DIRN_STOP);
+	elev_set_stop_lamp(1);
+	yeetusDeletus();
+
+	if(elev_get_floor_sensor_signal() != -1){
+		elev_set_door_open_lamp(1);
+	}
+}
